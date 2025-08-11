@@ -46,3 +46,6 @@ python weather-predict-model.py
 ```
 6. Access KubeFlow pipeline (port-forwarded) URL. `http://localhost:8080`
 7. Upload the compiled KubeFlow pipeline YAML file.
+
+# Key Features
+- Using pre-installed python 3.12-slim base image.
