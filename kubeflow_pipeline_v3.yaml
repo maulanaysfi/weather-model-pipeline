@@ -1,0 +1,310 @@
+# PIPELINE DEFINITION
+# Name: ml-pipeline
+components:
+  comp-evaluate-model:
+    executorLabel: exec-evaluate-model
+    inputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        xtest_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        ytest_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        metrics_output:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-load-data:
+    executorLabel: exec-load-data
+    outputDefinitions:
+      artifacts:
+        output_csv:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-preprocess-data:
+    executorLabel: exec-preprocess-data
+    inputDefinitions:
+      artifacts:
+        input_csv:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        output_xtest:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        output_xtrain:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        output_ytest:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        output_ytrain:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train-model:
+    executorLabel: exec-train-model
+    inputDefinitions:
+      artifacts:
+        xtrain_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        ytrain_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        model_output:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-evaluate-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - evaluate_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef evaluate_model(xtest_data: Input[Dataset], ytest_data: Input[Dataset],\
+          \ model: Input[Model], metrics_output: Output[Dataset]):\n    import pandas\
+          \ as pd\n    import matplotlib.pyplot as plt\n    from sklearn.metrics import\
+          \ classification_report, confusion_matrix, accuracy_score\n    from joblib\
+          \ import load\n\n    X_test = pd.read_csv(xtest_data.path)\n    y_test =\
+          \ pd.read_csv(ytest_data.path)\n\n    print('Testing dataset successfully\
+          \ loaded!')\n    print(f'X test shape: {X_test.shape}')\n    print(f'y test\
+          \ shape: {y_test.shape}')\n\n    print('Loading model...')\n    model =\
+          \ load(model.path)\n\n    print('Model is predicting...', end=\"\")\n  \
+          \  y_pred = model.predict(X_test)\n    print('OK!')\n\n    cls_report =\
+          \ classification_report(y_test, y_pred)\n    cm = confusion_matrix(y_test,\
+          \ y_pred)\n\n    metrics_path = metrics_output.path\n    with open(metrics_path,\
+          \ 'w') as file:\n        file.write(\"Classification report :\")\n     \
+          \   file.write(str(cls_report))\n\n    plt.figure(figsize=(8, 6))\n    plt.imshow(cm,\
+          \ interpolation='nearest')\n    plt.title('Confusion Matrix')\n    plt.colorbar()\n\
+          \    plt.xlabel('Predicted Label')\n    plt.ylabel('True Label')\n    plt.savefig(metrics_path.replace('.txt',\
+          \ '.png'))\n\n"
+        image: maulanaysfi/python-kfp
+    exec-load-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - load_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef load_data(output_csv: Output[Dataset]):\n    import kagglehub\n\
+          \    import pandas as pd\n\n    path = kagglehub.dataset_download(\"rohitgrewal/weather-data\"\
+          )\n    df = pd.read_csv(f'{path}/Project 1 - Weather Dataset.csv')\n\n \
+          \   df.to_csv(output_csv.path, index=False)\n\n"
+        image: maulanaysfi/python-kfp
+    exec-preprocess-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - preprocess_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef preprocess_data(input_csv: Input[Dataset], output_xtrain: Output[Dataset],\
+          \ output_xtest: Output[Dataset],\n                    output_ytrain: Output[Dataset],\
+          \ output_ytest: Output[Dataset]):\n    import pandas as pd\n    from sklearn.model_selection\
+          \ import train_test_split\n\n    df = pd.read_csv(input_csv.path)\n\n  \
+          \  print('Dataset loaded! Initial dataset shape: ', df.shape)\n    print('Missing\
+          \ values before preprocessed:\\n', df.isna().sum())\n\n    if df.isna().values.any():\n\
+          \        print('Deleting missing values...', end=\"\")\n        df.dropna(inplace=True)\n\
+          \        print('OK!')\n\n    df['Date/Time'] = pd.to_datetime(df['Date/Time'])\n\
+          \    df['Month'] = (df['Date/Time']).dt.month\n\n    X = df.drop(columns=['Weather','Date/Time'])\n\
+          \    y = df['Weather']\n\n    print('Splitting dataset for training and\
+          \ testing...', end=\"\")\n    X_train, X_test, y_train, y_test = train_test_split(X,\
+          \ y, test_size=0.2, random_state=42)\n    print('OK!')\n\n    print(f'\\\
+          nX train shape: {X_train.shape} | X test shape: {X_test.shape}')\n    print(f'y\
+          \ train shape: {y_train.shape} | y test shape: {y_test.shape}')\n\n    print('Loading\
+          \ splitted dataset into DataFrame...', end=\"\")\n    X_train_df = pd.DataFrame(X_train,\
+          \ columns=X.columns)\n    X_test_df = pd.DataFrame(X_test, columns=X.columns)\n\
+          \    y_train_df = pd.DataFrame(y_train)\n    y_test_df = pd.DataFrame(y_test)\n\
+          \n    X_train_df.to_csv(output_xtrain.path, index=False)\n    X_test_df.to_csv(output_xtest.path,\
+          \ index=False)\n    y_train_df.to_csv(output_ytrain.path, index=False)\n\
+          \    y_test_df.to_csv(output_ytest.path, index=False)\n    print('OK!')\n\
+          \n"
+        image: maulanaysfi/python-kfp
+    exec-train-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.14.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model(xtrain_data: Input[Dataset], ytrain_data: Input[Dataset],\
+          \ model_output: Output[Model]):\n    import pandas as pd\n    from sklearn.ensemble\
+          \ import RandomForestClassifier\n    from joblib import dump\n\n    X_train\
+          \ = pd.read_csv(xtrain_data.path)\n    y_train = pd.read_csv(ytrain_data.path)\n\
+          \n    print('Training dataset successfully loaded!')\n    print(f'X train\
+          \ shape: {X_train.shape}')\n    print(f'y train shape: {y_train.shape}')\n\
+          \n    model = RandomForestClassifier(criterion='entropy', max_depth=20,\
+          \ n_estimators=200, random_state=42)\n    model.fit(X_train, y_train)\n\n\
+          \    dump(model, model_output.path)\n\n"
+        image: maulanaysfi/python-kfp
+pipelineInfo:
+  name: ml-pipeline
+root:
+  dag:
+    tasks:
+      evaluate-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-evaluate-model
+        dependentTasks:
+        - preprocess-data
+        - train-model
+        inputs:
+          artifacts:
+            model:
+              taskOutputArtifact:
+                outputArtifactKey: model_output
+                producerTask: train-model
+            xtest_data:
+              taskOutputArtifact:
+                outputArtifactKey: output_xtest
+                producerTask: preprocess-data
+            ytest_data:
+              taskOutputArtifact:
+                outputArtifactKey: output_ytest
+                producerTask: preprocess-data
+        taskInfo:
+          name: evaluate-model
+      load-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-load-data
+        taskInfo:
+          name: load-data
+      preprocess-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-preprocess-data
+        dependentTasks:
+        - load-data
+        inputs:
+          artifacts:
+            input_csv:
+              taskOutputArtifact:
+                outputArtifactKey: output_csv
+                producerTask: load-data
+        taskInfo:
+          name: preprocess-data
+      train-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model
+        dependentTasks:
+        - preprocess-data
+        inputs:
+          artifacts:
+            xtrain_data:
+              taskOutputArtifact:
+                outputArtifactKey: output_xtrain
+                producerTask: preprocess-data
+            ytrain_data:
+              taskOutputArtifact:
+                outputArtifactKey: output_ytrain
+                producerTask: preprocess-data
+        taskInfo:
+          name: train-model
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.14.1
